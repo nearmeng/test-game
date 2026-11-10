@@ -11,8 +11,14 @@ func _ready() -> void:
 	for a in args:
 		if a == "selftest":
 			dev_mode = "selftest"
+		elif a == "padtest":
+			dev_mode = "padtest"
 		elif a.begins_with("shot="):
 			dev_mode = a.substr(5)
+	if dev_mode == "padtest":
+		var pad_runner: Node = load("res://src/dev/input_probe.gd").new()
+		add_child(pad_runner)
+		return
 	if dev_mode == "selftest":
 		if not ResourceLoader.exists("res://src/dev/selftest.gd"):
 			push_error("selftest script missing")

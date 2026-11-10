@@ -191,7 +191,7 @@ func _build() -> void:
 	var version := UiKit.label("v%s  ·  Godot 4.7" % str(ProjectSettings.get_setting("application/config/version", "1.0.0")), 13, Pal.TEXT_DIM)
 	_place(version, Rect2(32, 690, 400, 20))
 
-	var controls := UiKit.label("WASD / 方向键 移动    空格 / 回车 放弹    Esc 暂停    F11 全屏", 13, Pal.TEXT_DIM)
+	var controls := UiKit.label("WASD / 方向键 / 手柄 移动    空格 / 回车 / A 放弹    Esc / START 暂停    F11 全屏", 13, Pal.TEXT_DIM)
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_place(controls, Rect2(0, 690, 1280, 20))
 

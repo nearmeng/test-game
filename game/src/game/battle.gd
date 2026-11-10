@@ -353,6 +353,7 @@ func _explode(bomb: Bomb) -> void:
 	_apply_blast(cells, bomb)
 	App.audio.play_sfx("explosion", -1.0, randf_range(0.94, 1.06))
 	_add_shake(7.0, 0.35)
+	App.rumble(0.55)
 
 	# 连锁引爆
 	for other in bombs:
@@ -470,6 +471,7 @@ func _hit_fighter(f: Fighter, source_index: int) -> void:
 	fx.float_text(_cell_pos(f.current_cell()), "OUT", Pal.P_COLORS[f.index], 26)
 	App.audio.play_sfx("death", -2.0)
 	_add_shake(5.0, 0.3)
+	App.rumble(0.95)
 	if source_index >= 0 and source_index < fighters.size() and source_index != f.index:
 		fighters[source_index].kills += 1
 

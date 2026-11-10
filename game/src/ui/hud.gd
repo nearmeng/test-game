@@ -13,6 +13,7 @@ var cards: Array[Dictionary] = []
 var _timer_label: Label
 var _time_bar: ProgressBar
 var _alive_label: Label
+var _pad_label: Label
 var _round_label: Label
 var _score_box: VBoxContainer
 var _banner: Label
@@ -168,10 +169,14 @@ func _build() -> void:
 		rbox.add_child(row)
 	rbox.add_child(UiKit.hsep(Pal.LINE_SOFT, 4))
 	rbox.add_child(UiKit.label("操作", 15, Pal.AMBER))
-	var ctrl := UiKit.label("P1  WASD 移动 / 空格放弹\nP2  方向键 / 回车放弹\nEsc 暂停    R 重开本局", 12, Pal.TEXT_DIM)
+	var ctrl := UiKit.label("P1  WASD / 手柄    空格 / A 放弹\nP2  方向键 / 2 号手柄    回车放弹\nEsc / START 暂停    R 重开本局", 12, Pal.TEXT_DIM)
 	ctrl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ctrl.custom_minimum_size = Vector2(210, 0)
 	rbox.add_child(ctrl)
+	_pad_label = UiKit.label("手柄：检测中…", 11, Color("6a7290"))
+	_pad_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pad_label.custom_minimum_size = Vector2(210, 0)
+	rbox.add_child(_pad_label)
 
 	# --- 横幅 ---
 	_banner = UiKit.shadowed("", 40, Pal.AMBER, 14)
@@ -311,6 +316,8 @@ func _process(delta: float) -> void:
 	_sync_round_panel()
 	_sync_countdown(delta)
 	_sync_state()
+	if _pad_label != null and App != null:
+		_pad_label.text = App.pad_status_text()
 	if _banner.modulate.a > 0.0 and _banner_tween == null:
 		pass
 
