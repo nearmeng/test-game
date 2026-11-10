@@ -1,0 +1,12 @@
+# 引擎与工具链（体积大，按 README 自行获取）
+_tools/
+
+# Godot 导入缓存与运行产物
+game/.godot/
+game/userdata/
+
+# 构建产物（exe 单文件 105MB，超过 GitHub 单文件上限，走到 Release 或本地保留）
+build/
+dist/*.zip
+
+*.tmp

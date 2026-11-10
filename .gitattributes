@@ -1,0 +1,8 @@
+# 统一换行，避免 Windows/Linux 之间反复改动
+* text=auto eol=lf
+
+*.png binary
+*.wav binary
+*.exe binary
+*.zip binary
+*.tpz binary
