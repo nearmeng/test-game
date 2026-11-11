@@ -46,6 +46,13 @@ Godot 4.7 + GDScript，全部美术与音频由程序生成（无任何第三方
 | 双人同屏 | P1 + P2 + 2 名 AI |
 | 双人对战 | P1 vs P2 |
 
+## 3D 概念探索
+
+用 Godot 4.7 实时渲染的 3D 化探索稿（5 张，`concept3d/` 可复现），
+配套的镜头 / 玩法 / 美术 / 成本分析见 [docs/CONCEPT_3D.md](docs/CONCEPT_3D.md)。
+
+![3D 概念 · 全场](docs/concept3d/c3d_01_arena.png)
+
 ## 目录结构
 
 ```
@@ -59,7 +66,10 @@ game/                 Godot 工程（入口 main.tscn → src/main.gd）
 tools/gen_art.py      像素素材生成器（Pillow）
 tools/gen_audio.py    音效与 8-bit 配乐合成器（NumPy）
 docs/DESIGN.md        玩法与数值设计
+docs/CONCEPT_3D.md    3D 化设计分析（配概念渲染图）
 docs/art_preview.png  素材总览图
+docs/concept3d/       5 张 3D 概念渲染图
+concept3d/            3D 概念场景（独立 Godot 工程，仅用于出图）
 build/                导出的 Windows 可执行文件
 dist/                 迁移用的源码压缩包（剔除引擎与导入缓存）
 _tools/               本地 Godot 引擎（约 400MB，非工程内容）
