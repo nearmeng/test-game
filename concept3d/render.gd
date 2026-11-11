@@ -17,6 +17,9 @@ var wall_nodes: Array[Node3D] = []
 var crate_nodes: Array[Node3D] = []
 var grass_nodes: Array[Node3D] = []
 var grass_cells: Array[Vector2i] = []
+var mixed_crate_nodes: Array[Node3D] = []
+var mixed_grass_nodes: Array[Node3D] = []
+var _pm := {}
 
 
 func _ready() -> void:
@@ -28,6 +31,7 @@ func _ready() -> void:
 	_build_walls()
 	_build_crates()
 	_build_grass()
+	_build_mixed_props()
 	_build_fighters()
 	_build_heroes()
 	_build_bombs()
@@ -409,13 +413,103 @@ func _build_grass() -> void:
 
 
 func _set_arena_style(style: String) -> void:
-	var grass := style == "grass"
 	for n in grass_nodes:
-		n.visible = grass
+		n.visible = style == "grass"
 	for n in wall_nodes:
-		n.visible = not grass
+		n.visible = style != "grass"
 	for n in crate_nodes:
-		n.visible = not grass
+		n.visible = style == "blocks"
+	for n in mixed_crate_nodes:
+		n.visible = style == "mixed"
+	for n in mixed_grass_nodes:
+		n.visible = style == "mixed"
+
+
+## 混搭方案：一半掩体是箱子（管道具/开路），一半是草（管视野），石柱保留
+func _mixed_role(cell: Vector2i) -> String:
+	var v := (cell.x * 73856093) ^ (cell.y * 19349663)
+	v = v & 0xFFFFFFFF
+	v = ((v ^ (v >> 13)) * 1274126177) & 0xFFFFFFFF
+	v = v ^ (v >> 16)
+	var h := v % 100
+	if h < 22:
+		return "crate"
+	if h < 48:
+		return "grass"
+	return "empty"
+
+
+func _prop_mat(key: String, color: Color, rough: float, metal: float) -> StandardMaterial3D:
+	if not _pm.has(key):
+		_pm[key] = _mat(color, rough, metal)
+	return _pm[key]
+
+
+func _make_crate_at(cell: Vector2i, bucket: Array[Node3D]) -> void:
+	var p := _cell_pos(cell.x, cell.y)
+	var h := 1.18 + float((cell.x * 7 + cell.y * 13) % 9) * 0.014
+	var node := Node3D.new()
+	node.position = p
+	node.rotation_degrees = Vector3(0, float((cell.x * 37 + cell.y * 11) % 12) - 6.0, 0)
+	add_child(node)
+	var wood := _prop_mat("wood", Color(0.27, 0.16, 0.085), 0.88, 0.0)
+	var top := _prop_mat("wood_top", Color(0.33, 0.2, 0.11), 0.82, 0.0)
+	var band := _prop_mat("band", Color(0.1, 0.09, 0.09), 0.55, 0.65)
+	_box(Vector3(1.68, h, 1.68), Vector3(0, h * 0.5, 0), wood, node)
+	_box(Vector3(1.74, 0.09, 0.1), Vector3(0, h * 0.5 + h * 0.28, 0.85), band, node)
+	_box(Vector3(1.74, 0.05, 1.74), Vector3(0, h + 0.01, 0), top, node)
+	bucket.append(node)
+
+
+func _make_grass_at(cell: Vector2i, bucket: Array[Node3D], world_pos = Vector3.INF) -> void:
+	var palette := [
+		Color(0.07, 0.16, 0.08), Color(0.1, 0.22, 0.1),
+		Color(0.14, 0.3, 0.13), Color(0.19, 0.38, 0.16),
+	]
+	var root := Node3D.new()
+	root.position = _cell_pos(cell.x, cell.y) if world_pos == Vector3.INF else world_pos
+	add_child(root)
+	var r2 := RandomNumberGenerator.new()
+	r2.seed = cell.x * 977 + cell.y * 31 + 5
+	for i in 11:
+		var a := r2.randf() * TAU
+		var r := r2.randf_range(0.15, 0.86)
+		var h := r2.randf_range(0.55, 1.15)
+		var mat := _mat(palette[r2.randi_range(0, palette.size() - 1)], 0.92, 0.0)
+		var blob := _sphere(r2.randf_range(0.32, 0.52), Vector3(cos(a) * r, h, sin(a) * r), mat, root)
+		blob.scale = Vector3(1.0, r2.randf_range(1.5, 2.3), 1.0)
+	for i in 6:
+		var a2 := r2.randf() * TAU
+		var rr := r2.randf_range(0.2, 0.7)
+		var blade := _cone(0.0, r2.randf_range(0.04, 0.08), r2.randf_range(0.5, 1.0),
+			Vector3(cos(a2) * rr, r2.randf_range(1.5, 1.85), sin(a2) * rr),
+			_mat(Color(0.24, 0.46, 0.2), 0.85), root)
+		blade.rotation_degrees = Vector3(r2.randf_range(-14, 14), 0, r2.randf_range(-14, 14))
+	bucket.append(root)
+
+
+func _build_mixed_props() -> void:
+	for z in range(1, ROWS - 1):
+		for x in range(1, COLS - 1):
+			if _is_wall(x, z):
+				continue
+			var near_spawn := false
+			for s in [Vector2i(1, 1), Vector2i(13, 1), Vector2i(1, 9), Vector2i(13, 9)]:
+				if absi(x - s.x) + absi(z - s.y) <= 2:
+					near_spawn = true
+			if near_spawn:
+				continue
+			var cell := Vector2i(x, z)
+			var role := _mixed_role(cell)
+			if role == "crate":
+				_make_crate_at(cell, mixed_crate_nodes)
+			elif role == "grass":
+				_make_grass_at(cell, mixed_grass_nodes)
+	var all_nodes: Array[Node3D] = []
+	all_nodes.append_array(mixed_crate_nodes)
+	all_nodes.append_array(mixed_grass_nodes)
+	for n in all_nodes:
+		n.visible = false
 
 
 func _center_grass_cell() -> Vector2i:
@@ -489,6 +583,10 @@ func _build_stage() -> void:
 
 	# 台面上的炸弹
 	_make_bomb(Vector3(cx - 0.2, 0, cz + 0.6), 1.25)
+
+	# 台面上的草丛（混搭特写用）
+	var stage_props: Array[Node3D] = []
+	_make_grass_at(Vector2i(3, 3), stage_props, Vector3(cx - 0.4, 0, cz - 0.6))
 
 	# 摄影棚打光
 	var key := SpotLight3D.new()
@@ -691,6 +789,22 @@ func _render_all() -> void:
 		true
 	)
 	await _capture("c3d_07_ambush")
+
+	# 8. 草 + 箱子混搭：全场
+	_set_arena_style("mixed")
+	_set_flames(true)
+	_setup_camera(Vector3(32.0, 20.5, 39.5), Vector3(15.0, 0.4, 11.6), 34.0)
+	await _capture("c3d_08_mixed")
+
+	# 9. 混搭特写：草里蹲人，旁边木箱当掩体
+	_set_arena_style("blocks")
+	_set_heroes(true)
+	heroes[0].position = Vector3(61.0, 0, 10.9)
+	heroes[0].rotation_degrees = Vector3(0, 22, 0)
+	heroes[1].position = Vector3(64.4, 0, 13.6)
+	heroes[1].rotation_degrees = Vector3(0, -122, 0)
+	_setup_camera(Vector3(58.6, 1.6, 16.4), Vector3(62.2, 1.05, 11.3), 34.0, true)
+	await _capture("c3d_09_mixed_close")
 
 	print("CONCEPT DONE")
 	get_tree().quit(0)

@@ -48,10 +48,13 @@ Godot 4.7 + GDScript，全部美术与音频由程序生成（无任何第三方
 
 ## 3D 概念探索
 
-用 Godot 4.7 实时渲染的 3D 化探索稿（5 张，`concept3d/` 可复现），
+用 Godot 4.7 实时渲染的 3D 化探索稿（9 张，`concept3d/` 可复现），
 配套的镜头 / 玩法 / 美术 / 成本分析见 [docs/CONCEPT_3D.md](docs/CONCEPT_3D.md)。
 
-![3D 概念 · 全场](docs/concept3d/c3d_01_arena.png)
+草丛替代掩体的玩法与 AI 设计：[docs/CONCEPT_GRASS.md](docs/CONCEPT_GRASS.md)；
+推荐的「草 + 箱子混搭」方案（含战术图）：[docs/CONCEPT_MIXED.md](docs/CONCEPT_MIXED.md)。
+
+![3D 概念 · 混搭场地](docs/concept3d/c3d_08_mixed.png)
 
 ## 目录结构
 
