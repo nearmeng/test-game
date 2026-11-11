@@ -13,6 +13,10 @@ var fighters: Array[Node3D] = []
 var heroes: Array[Node3D] = []
 var bomb_group: Array[Node3D] = []
 var flame_group: Array[Node3D] = []
+var wall_nodes: Array[Node3D] = []
+var crate_nodes: Array[Node3D] = []
+var grass_nodes: Array[Node3D] = []
+var grass_cells: Array[Vector2i] = []
 
 
 func _ready() -> void:
@@ -23,6 +27,7 @@ func _ready() -> void:
 	_build_floor()
 	_build_walls()
 	_build_crates()
+	_build_grass()
 	_build_fighters()
 	_build_heroes()
 	_build_bombs()
@@ -239,8 +244,14 @@ func _build_walls() -> void:
 			if not _is_wall(x, z):
 				continue
 			var p := _cell_pos(x, z)
-			_box(Vector3(TILE - 0.04, 1.34, TILE - 0.04), p + Vector3(0, 0.67, 0), body)
-			_box(Vector3(TILE - 0.16, 0.12, TILE - 0.16), p + Vector3(0, 1.4, 0), top)
+			var is_edge := x == 0 or z == 0 or x == COLS - 1 or z == ROWS - 1
+			var node := Node3D.new()
+			node.position = p
+			add_child(node)
+			_box(Vector3(TILE - 0.04, 1.34, TILE - 0.04), Vector3(0, 0.67, 0), body, node)
+			_box(Vector3(TILE - 0.16, 0.12, TILE - 0.16), Vector3(0, 1.4, 0), top, node)
+			if not is_edge:
+				wall_nodes.append(node)
 
 
 func _build_crates() -> void:
@@ -264,11 +275,15 @@ func _build_crates() -> void:
 				continue
 			var p := _cell_pos(x, z)
 			var h := rng.randf_range(1.12, 1.3)
-			var crate := _box(Vector3(1.68, h, 1.68), p + Vector3(0, h * 0.5, 0), wood)
-			crate.rotation_degrees = Vector3(0, rng.randf_range(-5, 5), 0)
-			_box(Vector3(1.74, 0.09, 0.1), p + Vector3(0, h * 0.5 + h * 0.28, 0.85), band)
-			_box(Vector3(1.74, 0.09, 0.1), p + Vector3(0, h * 0.5 - h * 0.28, 0.85), band)
-			_box(Vector3(1.74, 0.05, 1.74), p + Vector3(0, h + 0.01, 0), wood_top)
+			var node := Node3D.new()
+			node.position = p
+			node.rotation_degrees = Vector3(0, rng.randf_range(-5, 5), 0)
+			add_child(node)
+			_box(Vector3(1.68, h, 1.68), Vector3(0, h * 0.5, 0), wood, node)
+			_box(Vector3(1.74, 0.09, 0.1), Vector3(0, h * 0.5 + h * 0.28, 0.85), band, node)
+			_box(Vector3(1.74, 0.09, 0.1), Vector3(0, h * 0.5 - h * 0.28, 0.85), band, node)
+			_box(Vector3(1.74, 0.05, 1.74), Vector3(0, h + 0.01, 0), wood_top, node)
+			crate_nodes.append(node)
 
 
 # ---------------------------------------------------------------- 角色
@@ -348,7 +363,107 @@ func _build_heroes() -> void:
 	heroes.append(blue)
 
 
-## 独立摄影棚：干净的地台 + 几个箱子 + 一枚炸弹 + 专用打光
+## 草丛：把“石头/箱子”换成一簇簇齐胸高的草，只挡视线、不挡路
+func _build_grass() -> void:
+	var palette := [
+		Color(0.07, 0.16, 0.08), Color(0.1, 0.22, 0.1),
+		Color(0.14, 0.3, 0.13), Color(0.19, 0.38, 0.16),
+	]
+	for z in range(2, ROWS - 2):
+		for x in range(2, COLS - 2):
+			if _is_wall(x, z):
+				continue
+			var near_spawn := false
+			for s in [Vector2i(1, 1), Vector2i(13, 1), Vector2i(1, 9), Vector2i(13, 9)]:
+				if absi(x - s.x) + absi(z - s.y) <= 2:
+					near_spawn = true
+			if near_spawn:
+				continue
+			if rng.randf() > 0.4:
+				continue
+			var cell := Vector2i(x, z)
+			grass_cells.append(cell)
+			var root := Node3D.new()
+			root.position = _cell_pos(x, z)
+			root.visible = false
+			add_child(root)
+			var r2 := RandomNumberGenerator.new()
+			r2.seed = x * 977 + z * 31
+			# 环绕一圈的草团，做出“齐腰深”的体积感
+			for i in 11:
+				var a := r2.randf() * TAU
+				var r := r2.randf_range(0.15, 0.86)
+				var h := r2.randf_range(0.55, 1.15)
+				var mat := _mat(palette[r2.randi_range(0, palette.size() - 1)], 0.92, 0.0)
+				var blob := _sphere(r2.randf_range(0.32, 0.52), Vector3(cos(a) * r, h, sin(a) * r), mat, root)
+				blob.scale = Vector3(1.0, r2.randf_range(1.5, 2.3), 1.0)
+			# 顶端草叶
+			for i in 6:
+				var a2 := r2.randf() * TAU
+				var rr := r2.randf_range(0.2, 0.7)
+				var blade := _cone(0.0, r2.randf_range(0.04, 0.08), r2.randf_range(0.5, 1.0),
+					Vector3(cos(a2) * rr, r2.randf_range(1.5, 1.85), sin(a2) * rr),
+					_mat(Color(0.24, 0.46, 0.2), 0.85), root)
+				blade.rotation_degrees = Vector3(r2.randf_range(-14, 14), 0, r2.randf_range(-14, 14))
+			grass_nodes.append(root)
+
+
+func _set_arena_style(style: String) -> void:
+	var grass := style == "grass"
+	for n in grass_nodes:
+		n.visible = grass
+	for n in wall_nodes:
+		n.visible = not grass
+	for n in crate_nodes:
+		n.visible = not grass
+
+
+func _center_grass_cell() -> Vector2i:
+	var best := Vector2i(7, 6)
+	var best_d := 1e9
+	for c in grass_cells:
+		var dx := float(c.x - 7)
+		var dy := float(c.y - 6)
+		var d := dx * dx + dy * dy
+		if d < best_d:
+			best_d = d
+			best = c
+	return best
+
+
+func _is_grass(cell: Vector2i) -> bool:
+	return grass_cells.has(cell)
+
+
+## 找一块“孤立”的草：四周都没草，方便拍出「一个人蹲在草里」的画面
+func _isolated_grass_cell() -> Vector2i:
+	var best := _center_grass_cell()
+	var best_d := 1e9
+	for c in grass_cells:
+		var lonely := true
+		for d in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			if _is_grass(c + d):
+				lonely = false
+		if not lonely:
+			continue
+		var dx := float(c.x - 7)
+		var dy := float(c.y - 6)
+		var dd := dx * dx + dy * dy
+		if dd < best_d:
+			best_d = dd
+			best = c
+	return best
+
+
+## 从草丛出发，挑一个连续两格都没有草的方向，作为镜头方向
+func _clear_direction(cell: Vector2i) -> Vector2i:
+	for d in [Vector2i(0, 1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, -1)]:
+		var step: Vector2i = d
+		var c1: Vector2i = cell + step
+		var c2: Vector2i = cell + step * 2
+		if not _is_grass(c1) and not _is_grass(c2) and not _is_wall(c1.x, c1.y) and not _is_wall(c2.x, c2.y):
+			return step
+	return Vector2i(0, 1)
 func _build_stage() -> void:
 	var cx := 62.0
 	var cz := 11.0
@@ -523,6 +638,7 @@ func _set_flames(v: bool) -> void:
 
 
 func _render_all() -> void:
+	_set_arena_style("blocks")
 	# 1. 全场 3/4 视角
 	_set_heroes(false)
 	_set_flames(true)
@@ -548,6 +664,33 @@ func _render_all() -> void:
 	_set_flames(true)
 	_setup_camera(Vector3(21.5, 6.2, 20.5), Vector3(15.0, 0.9, 14.5), 40.0, true)
 	await _capture("c3d_05_blast")
+
+	# 6. 草丛版场地：掩体换成齐腰深的草，只挡视线不挡路
+	_set_arena_style("grass")
+	_set_flames(true)
+	_setup_camera(Vector3(31.0, 19.5, 38.0), Vector3(15.0, 0.4, 11.6), 34.0)
+	await _capture("c3d_06_grass")
+
+	# 7. 草丛伏击：草里蹲人，外面的人看不见
+	_set_flames(false)
+	var hide := _isolated_grass_cell()
+	var cam_dir := _clear_direction(hide)
+	var p_hide := _cell_pos(hide.x, hide.y)
+	fighters[0].position = p_hide
+	fighters[0].rotation_degrees = Vector3(0, rad_to_deg(atan2(cam_dir.x, cam_dir.y)), 0)
+	var perp := Vector2i(cam_dir.y, -cam_dir.x)
+	# 敌人从草的另一侧逼近，草里的人正对着镜头
+	fighters[1].position = _cell_pos(hide.x - cam_dir.x * 3, hide.y - cam_dir.y * 3)
+	fighters[1].rotation_degrees = Vector3(0, rad_to_deg(atan2(cam_dir.x, cam_dir.y)), 0)
+	fighters[2].position = _cell_pos(hide.x + perp.x * 4, hide.y + perp.y * 4)
+	fighters[2].rotation_degrees = Vector3(0, 45, 0)
+	_setup_camera(
+		p_hide + Vector3(cam_dir.x, 0, cam_dir.y) * 8.6 + Vector3(0, 2.3, 0),
+		p_hide + Vector3(0, 1.0, 0),
+		30.0,
+		true
+	)
+	await _capture("c3d_07_ambush")
 
 	print("CONCEPT DONE")
 	get_tree().quit(0)
