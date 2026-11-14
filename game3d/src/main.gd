@@ -240,26 +240,31 @@ func _build_grass(cell: Vector2i, p: Vector3) -> void:
 		var base := Look.sphere(root, r.randf_range(0.34, 0.44), Vector3(cos(a0) * r0, 0.06, sin(a0) * r0), Look.mat("grass_soil", Color(0.045, 0.085, 0.045), 0.98))
 		base.scale = Vector3(1.15, 0.26, 1.15)
 
-	# 一丛草叶：单个 ArrayMesh，顶点色渐变 + 顶点风摆
-	var mesh := _make_grass_mesh(r, 78)
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.material_override = Look.grass_material()
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	root.add_child(mi)
+	# 一丛草叶：两层 ArrayMesh（高草 + 矮草填充），顶点色渐变 + 顶点风摆
+	var tall := MeshInstance3D.new()
+	tall.mesh = _make_grass_mesh(r, 150, 0.62, 1.66, 0.95)
+	tall.material_override = Look.grass_material()
+	tall.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(tall)
+
+	var short := MeshInstance3D.new()
+	short.mesh = _make_grass_mesh(r, 85, 0.2, 0.58, 1.0)
+	short.material_override = Look.grass_material()
+	short.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(short)
 	grass_nodes[cell] = root
 
 
 ## 生成一丛草：每根叶片是 3 段渐窄的带状面片，向外弯
-func _make_grass_mesh(r: RandomNumberGenerator, count: int) -> ArrayMesh:
+func _make_grass_mesh(r: RandomNumberGenerator, count: int, h_min: float = 0.55, h_max: float = 1.62, radius: float = 0.78) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in count:
 		var a := r.randf() * TAU
-		var rad := sqrt(r.randf()) * 0.78
+		var rad := sqrt(r.randf()) * radius
 		var base := Vector3(cos(a) * rad, 0.0, sin(a) * rad)
-		var edge := 1.0 - 0.35 * (rad / 0.78)
-		var h := r.randf_range(0.55, 1.62) * edge
+		var edge := 1.0 - 0.35 * (rad / maxf(radius, 0.01))
+		var h := r.randf_range(h_min, h_max) * edge
 		var lean := r.randf_range(0.18, 0.9)
 		var width := r.randf_range(0.026, 0.055)
 		var twist := r.randf_range(-0.6, 0.6)

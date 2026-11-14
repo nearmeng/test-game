@@ -149,7 +149,7 @@ func set_hide_visual(mode: String) -> void:
 	for m in meshes:
 		m.transparency = t
 	if marker != null:
-		marker.transparency = 0.0 if mode != "invisible" else 0.7
+		marker.transparency = 0.0 if mode != "invisible" else 1.0
 
 
 func die() -> void:
