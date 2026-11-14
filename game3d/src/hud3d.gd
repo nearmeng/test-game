@@ -8,6 +8,7 @@ var _alive: Label
 var _hide: Label
 var _banner: Label
 var _hint: Label
+var _cam: Label
 var _banner_tween: Tween
 
 
@@ -56,8 +57,14 @@ func _ready() -> void:
 	_hint.position = Vector2(0, 686)
 	_hint.size = Vector2(1280, 22)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text = "WASD / 方向键 移动    空格 放弹    手柄：左摇杆移动 / A 放弹    R 重开"
+	_hint.text = "WASD / 方向键 移动    空格 放弹    C 切换视角    R 重开    手柄：左摇杆 + A"
 	root.add_child(_hint)
+
+	_cam = _label(font, 15, Color(0.62, 0.85, 1.0))
+	_cam.position = Vector2(980, 660)
+	_cam.size = Vector2(270, 24)
+	_cam.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	root.add_child(_cam)
 
 
 func _label(font: Font, size: int, color: Color) -> Label:
@@ -76,6 +83,7 @@ func update_hud(main) -> void:
 	_status.text = "炸弹 %d / 火力 %d / 速度 %d" % [h.bombs_max, h.power, h.speed_level]
 	_alive.text = "存活 %d / 4" % main.alive_count()
 	_hide.text = "隐蔽中 · 对手看不见你" if h.hidden else ""
+	_cam.text = "视角：%s（C 切换）" % main.CAM_NAMES[main.cam_mode]
 
 
 func show_banner(text: String, color: Color, hold: float = 2.0) -> void:

@@ -21,6 +21,8 @@ var _powerup_nodes := {}
 var player_index := 0
 var hud: Hud3D
 var cam: Camera3D
+const CAM_NAMES := ["透视 55° 全场", "正交 45° 等距", "高俯视 70°", "跟随近景 35°"]
+var cam_mode := 1
 var state := "ready"
 var countdown := COUNTDOWN
 var time_left := ROUND_TIME
@@ -31,6 +33,7 @@ var selftest := false
 var manual := false
 var shot_mode := false
 var input_test := false
+var cam_shot_mode := false
 var round_stats := {"bombs": 0, "explosions": 0, "crates": 0, "kills": 0}
 
 var _t := 0.0
@@ -55,6 +58,8 @@ func _ready() -> void:
 		_run_shots.call_deferred()
 	elif input_test:
 		_run_input_test.call_deferred()
+	elif cam_shot_mode:
+		_run_cam_shots.call_deferred()
 
 
 func _parse_args() -> void:
@@ -68,6 +73,9 @@ func _parse_args() -> void:
 		elif a == "shot":
 			demo = true
 			shot_mode = true
+		elif a == "camshots":
+			demo = true
+			cam_shot_mode = true
 		elif a == "inputtest":
 			manual = false
 			input_test = true
@@ -81,6 +89,7 @@ func _register_input() -> void:
 		"p1_down": [KEY_S, KEY_DOWN],
 		"p1_bomb": [KEY_SPACE, KEY_J],
 		"restart": [KEY_R],
+		"cycle_cam": [KEY_C],
 	}
 	for action in keys.keys():
 		if not InputMap.has_action(action):
@@ -100,6 +109,7 @@ func _register_input() -> void:
 	_joy_button("p1_up", JOY_BUTTON_DPAD_UP)
 	_joy_button("p1_down", JOY_BUTTON_DPAD_DOWN)
 	_joy_button("p1_bomb", JOY_BUTTON_A)
+	_joy_button("cycle_cam", JOY_BUTTON_Y)
 
 
 func _joy_motion(action: String, axis: int, value: float) -> void:
@@ -269,6 +279,8 @@ func _step(delta: float) -> void:
 	if Input.is_action_just_pressed("restart"):
 		_start_round()
 		return
+	if Input.is_action_just_pressed("cycle_cam"):
+		_cycle_camera()
 
 	match state:
 		"ready":
@@ -553,16 +565,44 @@ func _update_hidden() -> void:
 	_tick_grass()
 
 
+func _cycle_camera() -> void:
+	cam_mode = (cam_mode + 1) % CAM_NAMES.size()
+	hud.show_banner("视角：%s" % CAM_NAMES[cam_mode], Color(0.6, 0.9, 1.0), 1.4)
+
+
 func _update_camera(delta: float) -> void:
-	# 固定俯角看全场，只做很小的跟随偏移：4 人同屏时“看得全”比“离得近”重要
 	var h := player_hero()
 	var focus := h.position if h.alive else Vector3(15, 0, 11)
 	var center := Vector3(15.0, 0.4, 11.6)
-	var bias := (focus - center) * 0.14
-	var want := Vector3(29.0, 19.0, 38.5) + bias
-	_cam_pos = _cam_pos.lerp(want, minf(1.0, delta * 2.5))
-	cam.position = _cam_pos
-	cam.look_at(center + bias * 1.5, Vector3.UP)
+	match cam_mode:
+		0:
+			# 透视 3/4 全场
+			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+			cam.fov = 35.0
+			var bias := (focus - center) * 0.14
+			_cam_pos = _cam_pos.lerp(Vector3(29.0, 19.0, 38.5) + bias, minf(1.0, delta * 2.5))
+			cam.position = _cam_pos
+			cam.look_at(center + bias * 1.5, Vector3.UP)
+		1:
+			# 正交等距：没有透视变形，格子距离一致，最接近 2D 的判读感
+			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+			cam.size = 20.5
+			var bias1 := (focus - center) * 0.08
+			cam.position = center + Vector3(23.0, 21.0, 25.0) + bias1
+			cam.look_at(center + bias1, Vector3.UP)
+		2:
+			# 高俯视：最像 2D，但角色只剩头顶
+			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+			cam.fov = 40.0
+			cam.position = center + Vector3(6.5, 40.0, 11.0)
+			cam.look_at(center, Vector3.UP)
+		3:
+			# 第三人称近景：代入感强，但只能看到局部
+			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+			cam.fov = 46.0
+			_cam_pos = _cam_pos.lerp(focus + Vector3(9.5, 10.5, 12.5), minf(1.0, delta * 4.0))
+			cam.position = _cam_pos
+			cam.look_at(focus + Vector3(0, 0.6, 0.6), Vector3.UP)
 	if shake > 0.0:
 		shake = maxf(0.0, shake - delta * 2.2)
 		cam.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * shake
@@ -684,3 +724,20 @@ func _play_sfx(name: String, vol: float = -6.0) -> void:
 	player.stream = stream
 	player.volume_db = vol
 	player.play()
+
+# ------------------------------------------------------------------ 视角对比截图
+func _run_cam_shots() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://shots"))
+	await get_tree().create_timer(5.0).timeout
+	manual = true
+	for i in CAM_NAMES.size():
+		cam_mode = i
+		_update_camera(1.0)
+		hud.update_hud(self)
+		await get_tree().create_timer(0.15).timeout
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		img.save_png("res://shots/cam_%d.png" % i)
+		print("CAMSHOT %d %s" % [i, CAM_NAMES[i]])
+	print("CAMSHOTS DONE")
+	get_tree().quit(0)
