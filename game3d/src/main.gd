@@ -21,8 +21,9 @@ var _powerup_nodes := {}
 var player_index := 0
 var hud: Hud3D
 var cam: Camera3D
-const CAM_NAMES := ["透视 55° 全场", "正交 45° 等距", "高俯视 70°", "跟随近景 35°"]
-var cam_mode := 1
+const CAM_NAMES := ["全场 正交 45°（推荐）", "跟随 65° 正交", "跟随 78° 近俯视", "跟随 55° 透视", "全场 透视 55°"]
+var cam_mode := 0
+var _cam_snap := true
 var state := "ready"
 var countdown := COUNTDOWN
 var time_left := ROUND_TIME
@@ -194,15 +195,15 @@ func _build_arena() -> void:
 func _build_wall(p: Vector3) -> void:
 	var body := Look.mat("wall", Color(0.13, 0.15, 0.21), 0.42, 0.55)
 	var top := Look.mat("wall_top", Color(0.21, 0.24, 0.32), 0.32, 0.6)
-	Look.box(arena_root, Vector3(1.96, 1.34, 1.96), p + Vector3(0, 0.67, 0), body)
-	Look.box(arena_root, Vector3(1.84, 0.12, 1.84), p + Vector3(0, 1.4, 0), top)
+	Look.box(arena_root, Vector3(1.96, 1.16, 1.96), p + Vector3(0, 0.58, 0), body)
+	Look.box(arena_root, Vector3(1.84, 0.12, 1.84), p + Vector3(0, 1.22, 0), top)
 
 
 func _build_crate(cell: Vector2i, p: Vector3) -> void:
 	var node := Node3D.new()
 	node.position = p
 	arena_root.add_child(node)
-	var h := 1.18
+	var h := 1.06
 	Look.box(node, Vector3(1.66, h, 1.66), Vector3(0, h * 0.5, 0), Look.mat("wood", Color(0.27, 0.16, 0.085), 0.88))
 	Look.box(node, Vector3(1.72, 0.09, 0.1), Vector3(0, h * 0.78, 0.84), Look.mat("band", Color(0.1, 0.09, 0.09), 0.55, 0.65))
 	Look.box(node, Vector3(1.72, 0.09, 0.1), Vector3(0, h * 0.22, 0.84), Look.mat("band", Color(0.1, 0.09, 0.09), 0.55, 0.65))
@@ -363,6 +364,7 @@ func _try_bomb(h: Hero3D) -> void:
 	h.bombs_out += 1
 	h.reveal_until = _t + 1.4
 	round_stats["bombs"] += 1
+	_make_blast_preview(b, c, h.power)
 	_play_sfx("bomb_place", -8.0)
 
 
@@ -383,6 +385,7 @@ func _explode(bomb: Bomb3D) -> void:
 	if bomb.exploded:
 		return
 	bomb.exploded = true
+	_clear_preview(bomb)
 	bombs_by_cell.erase(bomb.cell)
 	if bomb.owner_index >= 0 and bomb.owner_index < heroes.size():
 		heroes[bomb.owner_index].bombs_out = maxi(0, heroes[bomb.owner_index].bombs_out - 1)
@@ -567,42 +570,60 @@ func _update_hidden() -> void:
 
 func _cycle_camera() -> void:
 	cam_mode = (cam_mode + 1) % CAM_NAMES.size()
+	_cam_snap = true
 	hud.show_banner("视角：%s" % CAM_NAMES[cam_mode], Color(0.6, 0.9, 1.0), 1.4)
 
 
 func _update_camera(delta: float) -> void:
 	var h := player_hero()
-	var focus := h.position if h.alive else Vector3(15, 0, 11)
+	var raw := h.position if h.alive else Vector3(15, 0, 11)
+	# 跟随模式下把焦点夹在场地内，避免画面一半是空的
+	var follow := Vector3(clampf(raw.x, 7.0, 23.0), raw.y, clampf(raw.z, 6.0, 16.0))
 	var center := Vector3(15.0, 0.4, 11.6)
+	var cam_center := Vector3(15.0, 0.4, 11.0)
+
 	match cam_mode:
 		0:
-			# 透视 3/4 全场
-			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
-			cam.fov = 35.0
-			var bias := (focus - center) * 0.14
-			_cam_pos = _cam_pos.lerp(Vector3(29.0, 19.0, 38.5) + bias, minf(1.0, delta * 2.5))
-			cam.position = _cam_pos
-			cam.look_at(center + bias * 1.5, Vector3.UP)
-		1:
-			# 正交等距：没有透视变形，格子距离一致，最接近 2D 的判读感
+			# 全场正交，拉近到填满画面：4 人混战最需要“看得全”
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 			cam.size = 20.5
-			var bias1 := (focus - center) * 0.08
-			cam.position = center + Vector3(23.0, 21.0, 25.0) + bias1
-			cam.look_at(center + bias1, Vector3.UP)
+			cam.position = cam_center + Vector3(23.0, 21.0, 25.0)
+			cam.look_at(cam_center, Vector3.UP)
+		1:
+			# 跟随 + 正交：格子等距，身边约 8 格
+			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+			cam.size = 17.5
+			if _cam_snap:
+				_cam_pos = follow
+			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
+			cam.position = _cam_pos + Vector3(0.0, 22.0, 13.0)
+			cam.look_at(_cam_pos + Vector3(0, 0.6, 0.6), Vector3.UP)
 		2:
-			# 高俯视：最像 2D，但角色只剩头顶
-			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
-			cam.fov = 40.0
-			cam.position = center + Vector3(6.5, 40.0, 11.0)
-			cam.look_at(center, Vector3.UP)
+			# 跟随 + 近俯视：遮挡最少
+			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+			cam.size = 17.5
+			if _cam_snap:
+				_cam_pos = follow
+			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
+			cam.position = _cam_pos + Vector3(0.0, 27.0, 5.5)
+			cam.look_at(_cam_pos + Vector3(0, 0.4, 0.4), Vector3.UP)
 		3:
-			# 第三人称近景：代入感强，但只能看到局部
+			# 跟随 + 透视：有纵深，像动作游戏
 			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
-			cam.fov = 46.0
-			_cam_pos = _cam_pos.lerp(focus + Vector3(9.5, 10.5, 12.5), minf(1.0, delta * 4.0))
-			cam.position = _cam_pos
-			cam.look_at(focus + Vector3(0, 0.6, 0.6), Vector3.UP)
+			cam.fov = 42.0
+			if _cam_snap:
+				_cam_pos = follow
+			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
+			cam.position = _cam_pos + Vector3(0.0, 16.0, 14.5)
+			cam.look_at(_cam_pos + Vector3(0, 0.6, 1.2), Vector3.UP)
+		_:
+			# 全场透视
+			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+			cam.fov = 32.0
+			cam.position = Vector3(28.5, 18.5, 37.0)
+			cam.look_at(cam_center, Vector3.UP)
+	_cam_snap = false
+
 	if shake > 0.0:
 		shake = maxf(0.0, shake - delta * 2.2)
 		cam.position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * shake
@@ -741,3 +762,27 @@ func _run_cam_shots() -> void:
 		print("CAMSHOT %d %s" % [i, CAM_NAMES[i]])
 	print("CAMSHOTS DONE")
 	get_tree().quit(0)
+
+# ------------------------------------------------------------------ 爆炸范围预演
+func _make_blast_preview(bomb: Bomb3D, origin: Vector2i, power: int) -> void:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 0.32, 0.2, 0.18)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.3, 0.15)
+	mat.emission_energy_multiplier = 0.9
+	var nodes: Array[Node3D] = []
+	for c in world.blast_cells(origin, power):
+		var quad := Look.box(arena_root, Vector3(1.9, 0.02, 1.9), world.cell_pos(c) + Vector3(0, 0.05, 0), mat)
+		quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		nodes.append(quad)
+	bomb.set_meta("preview", nodes)
+
+
+func _clear_preview(bomb: Bomb3D) -> void:
+	if not is_instance_valid(bomb) or not bomb.has_meta("preview"):
+		return
+	for n in bomb.get_meta("preview"):
+		if is_instance_valid(n):
+			n.queue_free()
