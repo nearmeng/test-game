@@ -22,7 +22,7 @@ var player_index := 0
 var hud: Hud3D
 var cam: Camera3D
 const CAM_NAMES := ["全场 正交 45°（推荐）", "跟随 65° 正交", "跟随 78° 近俯视", "跟随 55° 透视", "全场 透视 55°"]
-var cam_mode := 0
+var cam_mode := 1
 var _cam_snap := true
 var state := "ready"
 var countdown := COUNTDOWN
@@ -578,7 +578,7 @@ func _update_camera(delta: float) -> void:
 	var h := player_hero()
 	var raw := h.position if h.alive else Vector3(15, 0, 11)
 	# 跟随模式下把焦点夹在场地内，避免画面一半是空的
-	var follow := Vector3(clampf(raw.x, 7.0, 23.0), raw.y, clampf(raw.z, 6.0, 16.0))
+	var follow := Vector3(clampf(raw.x, 8.5, 21.5), raw.y, clampf(raw.z, 7.0, 15.0))
 	var center := Vector3(15.0, 0.4, 11.6)
 	var cam_center := Vector3(15.0, 0.4, 11.0)
 
@@ -592,12 +592,12 @@ func _update_camera(delta: float) -> void:
 		1:
 			# 跟随 + 正交：格子等距，身边约 8 格
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			cam.size = 17.5
+			cam.size = 19.0
 			if _cam_snap:
 				_cam_pos = follow
 			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
-			cam.position = _cam_pos + Vector3(0.0, 22.0, 13.0)
-			cam.look_at(_cam_pos + Vector3(0, 0.6, 0.6), Vector3.UP)
+			cam.position = _cam_pos + Vector3(0.0, 23.0, 13.5)
+			cam.look_at(_cam_pos + Vector3(0, 2.6, 0.4), Vector3.UP)
 		2:
 			# 跟随 + 近俯视：遮挡最少
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
