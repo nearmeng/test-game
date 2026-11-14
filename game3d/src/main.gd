@@ -21,9 +21,11 @@ var _powerup_nodes := {}
 var player_index := 0
 var hud: Hud3D
 var cam: Camera3D
-const CAM_NAMES := ["全场 正交 45°（推荐）", "跟随 65° 正交", "跟随 78° 近俯视", "跟随 55° 透视", "全场 透视 55°"]
-var cam_mode := 1
+const CAM_NAMES := ["全场 正交（默认）", "跟随 65° 正交", "跟随 78° 近俯视", "全场 透视"]
+var cam_mode := 0
 var _cam_snap := true
+# 视野倍率：>1 看得更多（相机拉远），<1 看得更近
+var cam_zoom := 1.0
 var state := "ready"
 var countdown := COUNTDOWN
 var time_left := ROUND_TIME
@@ -91,6 +93,8 @@ func _register_input() -> void:
 		"p1_bomb": [KEY_SPACE, KEY_J],
 		"restart": [KEY_R],
 		"cycle_cam": [KEY_C],
+		"zoom_in": [KEY_BRACKETRIGHT, KEY_EQUAL],
+		"zoom_out": [KEY_BRACKETLEFT, KEY_MINUS],
 	}
 	for action in keys.keys():
 		if not InputMap.has_action(action):
@@ -282,6 +286,12 @@ func _step(delta: float) -> void:
 		return
 	if Input.is_action_just_pressed("cycle_cam"):
 		_cycle_camera()
+	if Input.is_action_just_pressed("zoom_in"):
+		cam_zoom = clampf(cam_zoom + 0.12, 0.7, 2.0)
+		_cam_snap = true
+	if Input.is_action_just_pressed("zoom_out"):
+		cam_zoom = clampf(cam_zoom - 0.12, 0.7, 2.0)
+		_cam_snap = true
 
 	match state:
 		"ready":
@@ -577,51 +587,42 @@ func _cycle_camera() -> void:
 func _update_camera(delta: float) -> void:
 	var h := player_hero()
 	var raw := h.position if h.alive else Vector3(15, 0, 11)
-	# 跟随模式下把焦点夹在场地内，避免画面一半是空的
-	var follow := Vector3(clampf(raw.x, 8.5, 21.5), raw.y, clampf(raw.z, 7.0, 15.0))
-	var center := Vector3(15.0, 0.4, 11.6)
-	var cam_center := Vector3(15.0, 0.4, 11.0)
+	var board := Vector3(15.0, 0.4, 11.0)
+	# 跟随模式：只做小幅漂移，镜头基本锚在场地中心
+	var drift := Vector3(clampf((raw.x - 15.0) * 0.3, -3.0, 3.0), 0.0, clampf((raw.z - 11.0) * 0.3, -2.5, 2.5))
+	var follow := board + drift
 
 	match cam_mode:
 		0:
-			# 全场正交，拉近到填满画面：4 人混战最需要“看得全”
+			# 全场正交、正对棋盘：15x11 整张图都在画面里，格子等距
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			cam.size = 20.5
-			cam.position = cam_center + Vector3(23.0, 21.0, 25.0)
-			cam.look_at(cam_center, Vector3.UP)
+			cam.size = 21.8 * cam_zoom
+			cam.position = board + Vector3(0.0, 28.0, 19.0)
+			cam.look_at(board, Vector3.UP)
 		1:
-			# 跟随 + 正交：格子等距，身边约 8 格
+			# 跟随 + 正交：镜头跟着人轻微漂移
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			cam.size = 19.0
+			cam.size = 15.0 * cam_zoom
 			if _cam_snap:
 				_cam_pos = follow
 			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
-			cam.position = _cam_pos + Vector3(0.0, 23.0, 13.5)
-			cam.look_at(_cam_pos + Vector3(0, 2.6, 0.4), Vector3.UP)
+			cam.position = _cam_pos + Vector3(0.0, 24.0, 14.0)
+			cam.look_at(_cam_pos + Vector3(0, 1.4, 0.3), Vector3.UP)
 		2:
 			# 跟随 + 近俯视：遮挡最少
 			cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-			cam.size = 17.5
+			cam.size = 15.0 * cam_zoom
 			if _cam_snap:
 				_cam_pos = follow
 			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
 			cam.position = _cam_pos + Vector3(0.0, 27.0, 5.5)
-			cam.look_at(_cam_pos + Vector3(0, 0.4, 0.4), Vector3.UP)
-		3:
-			# 跟随 + 透视：有纵深，像动作游戏
-			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
-			cam.fov = 42.0
-			if _cam_snap:
-				_cam_pos = follow
-			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
-			cam.position = _cam_pos + Vector3(0.0, 16.0, 14.5)
-			cam.look_at(_cam_pos + Vector3(0, 0.6, 1.2), Vector3.UP)
+			cam.look_at(_cam_pos + Vector3(0, 0.8, 0.3), Vector3.UP)
 		_:
-			# 全场透视
+			# 全场透视：斜 3/4，好看但有透视变形
 			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
-			cam.fov = 32.0
-			cam.position = Vector3(28.5, 18.5, 37.0)
-			cam.look_at(cam_center, Vector3.UP)
+			cam.fov = 44.0 * cam_zoom
+			cam.position = Vector3(30.0, 20.0, 38.0)
+			cam.look_at(board, Vector3.UP)
 	_cam_snap = false
 
 	if shake > 0.0:

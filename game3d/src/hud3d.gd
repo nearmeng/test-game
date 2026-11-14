@@ -57,7 +57,7 @@ func _ready() -> void:
 	_hint.position = Vector2(0, 686)
 	_hint.size = Vector2(1280, 22)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text = "WASD / 方向键 移动    空格 放弹    C 切换视角    R 重开    手柄：左摇杆 + A"
+	_hint.text = "WASD / 方向键 移动    空格 放弹    C 切换视角    [ ] 缩放    R 重开    手柄：左摇杆 + A"
 	root.add_child(_hint)
 
 	_cam = _label(font, 15, Color(0.62, 0.85, 1.0))
