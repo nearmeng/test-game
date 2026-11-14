@@ -233,25 +233,73 @@ func _build_grass(cell: Vector2i, p: Vector3) -> void:
 	var r := RandomNumberGenerator.new()
 	r.seed = cell.x * 977 + cell.y * 31
 
-	# 底部：几团压扁的深绿，给灌木一点体量（低矮，不做成球冠）
-	var base_colors := [Color(0.06, 0.14, 0.07), Color(0.08, 0.19, 0.09), Color(0.1, 0.23, 0.1)]
-	for i in 5:
+	# 贴地的暗色根团：遮住草根、给灌木一点体量
+	for i in 3:
 		var a0 := r.randf() * TAU
-		var r0 := r.randf_range(0.02, 0.4)
-		var base := Look.sphere(root, r.randf_range(0.36, 0.48), Vector3(cos(a0) * r0, 0.14, sin(a0) * r0), Look.mat("grass_base_%d" % (i % 3), base_colors[i % 3], 0.95))
-		base.scale = Vector3(1.1, 0.4, 1.1)
+		var r0 := r.randf_range(0.0, 0.3)
+		var base := Look.sphere(root, r.randf_range(0.34, 0.44), Vector3(cos(a0) * r0, 0.06, sin(a0) * r0), Look.mat("grass_soil", Color(0.045, 0.085, 0.045), 0.98))
+		base.scale = Vector3(1.15, 0.26, 1.15)
 
-	# 草叶：细长四棱锥，向外倾斜、高低错落
-	var blade_colors := [Color(0.13, 0.3, 0.13), Color(0.18, 0.4, 0.16), Color(0.24, 0.5, 0.2), Color(0.09, 0.22, 0.1)]
-	for i in 34:
-		var a := r.randf() * TAU
-		var rr := r.randf_range(0.04, 0.72)
-		var h := r.randf_range(0.9, 1.72)
-		var mat := Look.mat("grass_blade_%d" % (i % 4), blade_colors[i % 4], 0.9)
-		var blade := Look.cone(root, 0.004, r.randf_range(0.03, 0.055), h, Vector3(cos(a) * rr, h * 0.5, sin(a) * rr), mat, 4)
-		var tilt := r.randf_range(5.0, 18.0) * (0.5 + rr)
-		blade.rotation_degrees = Vector3(-sin(a) * tilt, r.randf_range(0, 180), cos(a) * tilt)
+	# 一丛草叶：单个 ArrayMesh，顶点色渐变 + 顶点风摆
+	var mesh := _make_grass_mesh(r, 78)
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.material_override = Look.grass_material()
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(mi)
 	grass_nodes[cell] = root
+
+
+## 生成一丛草：每根叶片是 3 段渐窄的带状面片，向外弯
+func _make_grass_mesh(r: RandomNumberGenerator, count: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in count:
+		var a := r.randf() * TAU
+		var rad := sqrt(r.randf()) * 0.78
+		var base := Vector3(cos(a) * rad, 0.0, sin(a) * rad)
+		var edge := 1.0 - 0.35 * (rad / 0.78)
+		var h := r.randf_range(0.55, 1.62) * edge
+		var lean := r.randf_range(0.18, 0.9)
+		var width := r.randf_range(0.026, 0.055)
+		var twist := r.randf_range(-0.6, 0.6)
+		var tint := r.randf_range(0.78, 1.15)
+		var segs := 3
+		var sides: Array[Vector3] = []
+		for s in segs + 1:
+			var t := float(s) / float(segs)
+			var bend := lean * t * t
+			var pos := base + Vector3(cos(a), 0.0, sin(a)) * bend + Vector3(0.0, h * t, 0.0)
+			var side := Vector3(-sin(a), 0.0, cos(a)).rotated(Vector3.UP, twist * t)
+			var half := width * (1.0 - 0.85 * t) * 0.5
+			sides.append(pos - side * half)
+			sides.append(pos + side * half)
+		for s in segs:
+			var t0 := float(s) / float(segs)
+			var t1 := float(s + 1) / float(segs)
+			var l0 := sides[s * 2]
+			var r0v := sides[s * 2 + 1]
+			var l1 := sides[s * 2 + 2]
+			var r1 := sides[s * 2 + 3]
+			_grass_tri(st, l0, l1, r0v, t0, t1, t0, tint)
+			_grass_tri(st, r0v, l1, r1, t0, t1, t1, tint)
+	return st.commit()
+
+
+func _grass_tri(st: SurfaceTool, p0: Vector3, p1: Vector3, p2: Vector3, u0: float, u1: float, u2: float, tint: float) -> void:
+	var col := Color(tint, tint, tint)
+	st.set_color(col)
+	st.set_normal(Vector3.UP)
+	st.set_uv(Vector2(0.5, u0))
+	st.add_vertex(p0)
+	st.set_color(col)
+	st.set_normal(Vector3.UP)
+	st.set_uv(Vector2(0.5, u1))
+	st.add_vertex(p1)
+	st.set_color(col)
+	st.set_normal(Vector3.UP)
+	st.set_uv(Vector2(0.5, u2))
+	st.add_vertex(p2)
 
 
 func _spawn_heroes() -> void:

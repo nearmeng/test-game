@@ -141,3 +141,12 @@ static func lights(parent: Node3D) -> void:
 	rim_b.light_energy = 3.2
 	rim_b.omni_range = 24.0
 	parent.add_child(rim_b)
+
+
+static func grass_material() -> ShaderMaterial:
+	if not _mats.has("grass_shader"):
+		var sh: Shader = load("res://src/grass.gdshader")
+		var m := ShaderMaterial.new()
+		m.shader = sh
+		_mats["grass_shader"] = m
+	return _mats["grass_shader"] as ShaderMaterial
