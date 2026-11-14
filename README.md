@@ -56,10 +56,18 @@ Godot 4.7 + GDScript，全部美术与音频由程序生成（无任何第三方
 
 ![3D 概念 · 混搭场地](docs/concept3d/c3d_08_mixed.png)
 
+## 3D 可玩版
+
+独立工程 [game3d/](game3d/README.md)：Godot 4.7 的 3D 炸弹竞技，**草 + 箱子混搭**场地，
+1 名玩家 vs 3 个 AI，带视线隐蔽与探草 AI。成品在 [build/火拼炸弹堂3D.exe](build/火拼炸弹堂3D.exe)。
+
+![3D 可玩版](game3d/shots/g3d_02_fight.png)
+
 ## 目录结构
 
 ```
-game/                 Godot 工程（入口 main.tscn → src/main.gd）
+game/                 2D 版工程（入口 main.tscn → src/main.gd）
+game3d/               3D 可玩版工程（独立，草+箱子混搭）
   src/core/           主题、字体、存档、音频、素材加载
   src/game/           场地、角色、炸弹、火焰、AI、战斗主循环、战斗场景
   src/ui/             主菜单、HUD、设置面板

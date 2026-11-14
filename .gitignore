@@ -5,6 +5,8 @@ _tools/
 game/.godot/
 game/userdata/
 concept3d/.godot/
+game3d/.godot/
+game3d/userdata/
 
 # 概念图原始渲染（成品在 docs/concept3d/）
 docs/concept3d/raw/
