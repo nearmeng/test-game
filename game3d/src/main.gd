@@ -49,6 +49,9 @@ var _cam_pos := Vector3(28, 19, 34)
 func _ready() -> void:
 	_parse_args()
 	_register_input()
+	if not (selftest or manual or shot_mode or cam_shot_mode):
+		# 默认最大化：逻辑分辨率仍是 1280x720，窗口越大整体越大，但全图始终可见
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MAXIMIZED)
 	add_child(Look.environment())
 	Look.lights(self)
 	_build_camera()
@@ -93,6 +96,7 @@ func _register_input() -> void:
 		"p1_bomb": [KEY_SPACE, KEY_J],
 		"restart": [KEY_R],
 		"cycle_cam": [KEY_C],
+		"fullscreen": [KEY_F11],
 		"zoom_in": [KEY_BRACKETRIGHT, KEY_EQUAL],
 		"zoom_out": [KEY_BRACKETLEFT, KEY_MINUS],
 	}
@@ -292,6 +296,9 @@ func _step(delta: float) -> void:
 	if Input.is_action_just_pressed("zoom_out"):
 		cam_zoom = clampf(cam_zoom - 0.12, 0.7, 2.0)
 		_cam_snap = true
+	if Input.is_action_just_pressed("fullscreen"):
+		var fs := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if fs else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 	match state:
 		"ready":
