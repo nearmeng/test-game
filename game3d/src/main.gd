@@ -37,6 +37,8 @@ var manual := false
 var shot_mode := false
 var input_test := false
 var cam_shot_mode := false
+var detail_mode := false
+var _detail_focus := Vector3(15, 0, 11)
 var round_stats := {"bombs": 0, "explosions": 0, "crates": 0, "kills": 0}
 
 var _t := 0.0
@@ -66,6 +68,8 @@ func _ready() -> void:
 		_run_input_test.call_deferred()
 	elif cam_shot_mode:
 		_run_cam_shots.call_deferred()
+	elif detail_mode:
+		_run_detail_shots.call_deferred()
 
 
 func _parse_args() -> void:
@@ -79,6 +83,9 @@ func _parse_args() -> void:
 		elif a == "shot":
 			demo = true
 			shot_mode = true
+		elif a == "detail":
+			demo = true
+			detail_mode = true
 		elif a == "camshots":
 			demo = true
 			cam_shot_mode = true
@@ -220,27 +227,30 @@ func _build_crate(cell: Vector2i, p: Vector3) -> void:
 
 
 func _build_grass(cell: Vector2i, p: Vector3) -> void:
-	var palette := [
-		Color(0.07, 0.16, 0.08), Color(0.1, 0.22, 0.1),
-		Color(0.14, 0.3, 0.13), Color(0.19, 0.38, 0.16),
-	]
 	var root := Node3D.new()
 	root.position = p
 	arena_root.add_child(root)
 	var r := RandomNumberGenerator.new()
 	r.seed = cell.x * 977 + cell.y * 31
-	for i in 10:
-		var a := r.randf() * TAU
-		var rr := r.randf_range(0.15, 0.82)
-		var hh := r.randf_range(0.55, 1.1)
-		var mat := Look.mat("grass_%d" % r.randi_range(0, 3), palette[r.randi_range(0, 3)], 0.92)
-		var blob := Look.sphere(root, r.randf_range(0.32, 0.5), Vector3(cos(a) * rr, hh, sin(a) * rr), mat)
-		blob.scale = Vector3(1, r.randf_range(1.5, 2.2), 1)
+
+	# 底部：几团压扁的深绿，给灌木一点体量（低矮，不做成球冠）
+	var base_colors := [Color(0.06, 0.14, 0.07), Color(0.08, 0.19, 0.09), Color(0.1, 0.23, 0.1)]
 	for i in 5:
-		var a2 := r.randf() * TAU
-		var r2 := r.randf_range(0.2, 0.65)
-		var blade := Look.cone(root, 0.0, 0.06, r.randf_range(0.5, 0.95), Vector3(cos(a2) * r2, r.randf_range(1.45, 1.8), sin(a2) * r2), Look.mat("grass_blade", Color(0.24, 0.46, 0.2), 0.85))
-		blade.rotation_degrees = Vector3(r.randf_range(-14, 14), 0, r.randf_range(-14, 14))
+		var a0 := r.randf() * TAU
+		var r0 := r.randf_range(0.02, 0.4)
+		var base := Look.sphere(root, r.randf_range(0.36, 0.48), Vector3(cos(a0) * r0, 0.14, sin(a0) * r0), Look.mat("grass_base_%d" % (i % 3), base_colors[i % 3], 0.95))
+		base.scale = Vector3(1.1, 0.4, 1.1)
+
+	# 草叶：细长四棱锥，向外倾斜、高低错落
+	var blade_colors := [Color(0.13, 0.3, 0.13), Color(0.18, 0.4, 0.16), Color(0.24, 0.5, 0.2), Color(0.09, 0.22, 0.1)]
+	for i in 34:
+		var a := r.randf() * TAU
+		var rr := r.randf_range(0.04, 0.72)
+		var h := r.randf_range(0.9, 1.72)
+		var mat := Look.mat("grass_blade_%d" % (i % 4), blade_colors[i % 4], 0.9)
+		var blade := Look.cone(root, 0.004, r.randf_range(0.03, 0.055), h, Vector3(cos(a) * rr, h * 0.5, sin(a) * rr), mat, 4)
+		var tilt := r.randf_range(5.0, 18.0) * (0.5 + rr)
+		blade.rotation_degrees = Vector3(-sin(a) * tilt, r.randf_range(0, 180), cos(a) * tilt)
 	grass_nodes[cell] = root
 
 
@@ -317,6 +327,7 @@ func _step(delta: float) -> void:
 			_tick_bombs(delta)
 			_tick_blasts(delta)
 			_check_pickups()
+			_animate_powerups(delta)
 			_check_deaths()
 			_check_round_end()
 		"over":
@@ -467,18 +478,68 @@ func _destroy_crate(c: Vector2i, owner: int) -> void:
 
 
 func _spawn_powerup_visual(c: Vector2i) -> void:
-	var root := Node3D.new()
-	root.position = world.cell_pos(c) + Vector3(0, 0.55, 0)
-	arena_root.add_child(root)
-	var colors := [Color(1.0, 0.72, 0.25), Color(1.0, 0.4, 0.15), Color(0.35, 0.85, 1.0)]
 	var kind: int = powerups[c]
-	Look.box(root, Vector3(0.44, 0.44, 0.44), Vector3.ZERO, Look.emit("pickup_%d" % kind, colors[kind], 2.4))
-	var l := OmniLight3D.new()
-	l.light_color = colors[kind]
-	l.light_energy = 1.6
-	l.omni_range = 4.0
-	root.add_child(l)
+	var tint: Color = [Color(1.0, 0.72, 0.25), Color(1.0, 0.42, 0.18), Color(0.35, 0.85, 1.0)][kind]
+	var root := Node3D.new()
+	root.position = world.cell_pos(c)
+	arena_root.add_child(root)
+
+	# 地面光环
+	var ring := Look.cyl(root, 0.52, 0.02, Vector3(0, 0.05, 0), Look.emit("pu_ring_%d" % kind, tint, 2.0))
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	# 悬浮图标：会旋转 + 上下浮动
+	var icon := Node3D.new()
+	icon.position = Vector3(0, 1.15, 0)
+	icon.scale = Vector3.ONE * 1.3
+	root.add_child(icon)
+
+	match kind:
+		0:
+			# 炸弹 +1：黑炸弹 + 引信 + 火星
+			Look.sphere(icon, 0.27, Vector3.ZERO, Look.mat("pu_bomb_shell", Color(0.04, 0.04, 0.06), 0.18, 0.6))
+			Look.cyl(icon, 0.055, 0.1, Vector3(0.02, 0.3, 0), Look.mat("pu_fuse_cap", Color(0.09, 0.09, 0.11), 0.5, 0.4))
+			var fuse := Look.cyl(icon, 0.02, 0.16, Vector3(0.05, 0.4, 0.01), Look.mat("pu_fuse", Color(0.42, 0.33, 0.18), 0.9))
+			fuse.rotation_degrees = Vector3(0, 0, 20)
+			Look.sphere(icon, 0.05, Vector3(0.08, 0.47, 0.01), Look.emit("pu_spark", Color(1.0, 0.75, 0.3), 5.0))
+		1:
+			# 火力 +1：三层火苗
+			for i in 3:
+				var fc: Color = [Color(0.75, 0.16, 0.08), Color(1.0, 0.42, 0.12), Color(1.0, 0.85, 0.45)][i]
+				Look.cone(icon, 0.01, 0.22 - i * 0.055, 0.34, Vector3(0, i * 0.16 - 0.12, 0), Look.emit("pu_flame_%d" % i, fc, 3.2), 6)
+		2:
+			# 速度 +1：箭头 + 两条速度线
+			var head := Look.cone(icon, 0.0, 0.17, 0.34, Vector3(0, 0, 0.1), Look.emit("pu_arrow", tint, 2.0), 4)
+			head.rotation_degrees = Vector3(90, 0, 0)
+			Look.box(icon, Vector3(0.07, 0.07, 0.28), Vector3(0, 0, -0.3), Look.emit("pu_line", tint, 1.6))
+			Look.box(icon, Vector3(0.05, 0.05, 0.18), Vector3(0, 0, -0.52), Look.emit("pu_line2", tint, 1.2))
+
+	# 顶部加号：统一表达“强化”
+	Look.box(icon, Vector3(0.17, 0.035, 0.035), Vector3(0, 0.6, 0), Look.emit("pu_plus", Color(0.85, 0.9, 1.0), 1.0))
+	Look.box(icon, Vector3(0.035, 0.17, 0.035), Vector3(0, 0.6, 0), Look.emit("pu_plus", Color(0.85, 0.9, 1.0), 1.0))
+
+	var light := OmniLight3D.new()
+	light.light_color = tint
+	light.light_energy = 1.2
+	light.omni_range = 3.4
+	root.add_child(light)
+
+	root.set_meta("icon", icon)
+	root.set_meta("phase", float(c.x) * 0.7 + float(c.y) * 1.3)
 	_powerup_nodes[c] = root
+
+
+func _animate_powerups(delta: float) -> void:
+	for c in _powerup_nodes.keys():
+		var node = _powerup_nodes[c]
+		if not is_instance_valid(node):
+			continue
+		var icon = node.get_meta("icon", null)
+		if icon == null or not is_instance_valid(icon):
+			continue
+		var phase: float = node.get_meta("phase", 0.0)
+		icon.rotation.y += delta * 1.5
+		icon.position.y = 1.15 + sin(_t * 2.4 + phase) * 0.1
 
 
 func _flatten_grass(c: Vector2i) -> void:
@@ -624,6 +685,12 @@ func _update_camera(delta: float) -> void:
 			_cam_pos = _cam_pos.lerp(follow, minf(1.0, delta * 6.0))
 			cam.position = _cam_pos + Vector3(0.0, 27.0, 5.5)
 			cam.look_at(_cam_pos + Vector3(0, 0.8, 0.3), Vector3.UP)
+		4:
+			# 素材特写机位（不走常规）
+			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
+			cam.fov = 34.0
+			cam.position = _detail_focus + Vector3(3.0, 2.3, 3.9)
+			cam.look_at(_detail_focus + Vector3(0, 1.05, 0), Vector3.UP)
 		_:
 			# 全场透视：斜 3/4，好看但有透视变形
 			cam.projection = Camera3D.PROJECTION_PERSPECTIVE
@@ -794,3 +861,65 @@ func _clear_preview(bomb: Bomb3D) -> void:
 	for n in bomb.get_meta("preview"):
 		if is_instance_valid(n):
 			n.queue_free()
+
+
+# ------------------------------------------------------------------ 素材特写
+func _run_detail_shots() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://shots"))
+	await get_tree().create_timer(3.6).timeout
+	hud.clear_banner()
+
+	# 清出一条干净的展示走廊：第 5 行、第 6-10 列
+	for x in range(5, 12):
+		for z in range(4, 7):
+			var cc := Vector2i(x, z)
+			world.set_kind(cc, TileWorld.Kind.FLOOR)
+			if crate_nodes.has(cc):
+				var cn: Node3D = crate_nodes[cc]
+				crate_nodes.erase(cc)
+				cn.queue_free()
+			if grass_nodes.has(cc) and not grass_flat.has(cc):
+				var gn: Node3D = grass_nodes[cc]
+				grass_nodes.erase(cc)
+				gn.queue_free()
+	for x in range(6, 11):
+		var c := Vector2i(x, 5)
+		world.set_kind(c, TileWorld.Kind.FLOOR)
+		if crate_nodes.has(c):
+			var n: Node3D = crate_nodes[c]
+			crate_nodes.erase(c)
+			n.queue_free()
+		if grass_nodes.has(c) and not grass_flat.has(c):
+			var g: Node3D = grass_nodes[c]
+			grass_nodes.erase(c)
+			g.queue_free()
+
+	# 三件道具一字排开
+	for i in 3:
+		var c2 := Vector2i(7 + i, 5)
+		powerups[c2] = i
+		_spawn_powerup_visual(c2)
+
+	_detail_focus = world.cell_pos(Vector2i(8, 5)) + Vector3(0, 0.6, 0)
+	cam_mode = 4
+	await get_tree().create_timer(0.7).timeout
+	await _capture("g3d_detail_items")
+
+	# 草丛特写：找一片离得近的草
+	var px := player_hero().cell
+	var bush := Vector2i(-1, -1)
+	var best := 999
+	for c in grass_nodes.keys():
+		if world.kind(c) != TileWorld.Kind.GRASS:
+			continue
+		var d := absi(c.x - px.x) + absi(c.y - px.y)
+		if d < best:
+			best = d
+			bush = c
+	if bush != Vector2i(-1, -1):
+		_detail_focus = world.cell_pos(bush) + Vector3(0, 0.5, 0)
+		await get_tree().create_timer(0.6).timeout
+		await _capture("g3d_detail_grass")
+
+	print("DETAIL DONE")
+	get_tree().quit(0)

@@ -66,13 +66,13 @@ static func cyl(parent: Node3D, radius: float, height: float, pos: Vector3, mate
 	return mi
 
 
-static func cone(parent: Node3D, top: float, bottom: float, height: float, pos: Vector3, material: Material) -> MeshInstance3D:
+static func cone(parent: Node3D, top: float, bottom: float, height: float, pos: Vector3, material: Material, segments: int = 18) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = top
 	mesh.bottom_radius = bottom
 	mesh.height = height
-	mesh.radial_segments = 18
+	mesh.radial_segments = segments
 	mi.mesh = mesh
 	mi.material_override = material
 	mi.position = pos

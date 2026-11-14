@@ -83,7 +83,7 @@ func update_hud(main) -> void:
 	_status.text = "炸弹 %d / 火力 %d / 速度 %d" % [h.bombs_max, h.power, h.speed_level]
 	_alive.text = "存活 %d / 4" % main.alive_count()
 	_hide.text = "隐蔽中 · 对手看不见你" if h.hidden else ""
-	_cam.text = "视角：%s（C 切换）" % main.CAM_NAMES[main.cam_mode]
+	_cam.text = "视角：%s（C 切换）" % (main.CAM_NAMES[main.cam_mode] if main.cam_mode < main.CAM_NAMES.size() else "特写")
 
 
 func show_banner(text: String, color: Color, hold: float = 2.0) -> void:
